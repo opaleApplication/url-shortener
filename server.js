@@ -24,9 +24,13 @@ let nextId = 1;
 
 // Helper validation + dns.lookup
 function validateAndNormalizeUrl(input) {
+  if (typeof input !== "string") return { error: "invalid url" };
+  const trimmed = input.trim();
+  if (!trimmed) return { error: "invalid url" };
+
   let u;
   try {
-    u = new URL(input);
+    u = new URL(trimmed);
   } catch {
     return { error: "invalid url" };
   }
@@ -36,8 +40,8 @@ function validateAndNormalizeUrl(input) {
     return { error: "invalid url" };
   }
 
-  // Normalisation légère (garde le input tel quel si tu préfères)
-  return { hostname: u.hostname, normalized: u.toString() };
+  // Conserver l'URL d'origine pour matcher les tests FCC
+  return { hostname: u.hostname, normalized: trimmed };
 }
 
 // POST: /api/shorturl
