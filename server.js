@@ -5,24 +5,25 @@ const dns = require("dns");
 
 const app = express();
 
-// Middlewares (IMPORTANT pour FCC)
+// Middlewares
 app.use(cors());
-app.use(express.urlencoded({ extended: false })); // body parsing (form)
-app.use(express.json()); // body parsing (json)
+app.use(express.urlencoded({ extended: false })); // Pour parser les formulaires
+app.use(express.json()); // Pour parser le JSON
 
+// Servir les fichiers statiques
 app.use("/public", express.static(path.join(__dirname, "public")));
 
-// Page d'accueil (optionnelle mais utile)
+// Page d'accueil
 app.get("/", (req, res) => {
   res.sendFile(path.join(__dirname, "views", "index.html"));
 });
 
-// Stockage en mémoire (suffisant pour FCC)
+// Stockage des URLs
 const idToUrl = new Map(); // short_id -> original_url
-const urlToId = new Map(); // original_url -> short_id (dédup)
+const urlToId = new Map(); // original_url -> short_id (pour éviter les doublons)
 let nextId = 1;
 
-// Helper validation + dns.lookup
+// Fonction pour valider et normaliser les URLs
 function validateAndNormalizeUrl(input) {
   if (typeof input !== "string") return { error: "invalid url" };
   const trimmed = input.trim();
@@ -30,21 +31,25 @@ function validateAndNormalizeUrl(input) {
 
   let u;
   try {
-    u = new URL(trimmed);
+    // Ajouter https:// si l'URL ne commence pas par http:// ou https://
+    if (!trimmed.startsWith("http://") && !trimmed.startsWith("https://")) {
+      u = new URL(`https://${trimmed}`);
+    } else {
+      u = new URL(trimmed);
+    }
   } catch {
     return { error: "invalid url" };
   }
 
-  // Format attendu par FCC: http://... ou https://...
   if (u.protocol !== "http:" && u.protocol !== "https:") {
     return { error: "invalid url" };
   }
 
-  // Conserver l'URL d'origine pour matcher les tests FCC
-  return { hostname: u.hostname, normalized: trimmed };
+  // Retourner l'URL absolue
+  return { hostname: u.hostname, normalized: u.href };
 }
 
-// POST: /api/shorturl
+// POST: Créer une URL raccourcie
 app.post("/api/shorturl", (req, res) => {
   const inputUrl = req.body.url;
 
@@ -55,7 +60,7 @@ app.post("/api/shorturl", (req, res) => {
   dns.lookup(check.hostname, (err) => {
     if (err) return res.json({ error: "invalid url" });
 
-    // Dédup: même URL -> même id (pas obligatoire, mais stable)
+    // Éviter les doublons
     if (urlToId.has(check.normalized)) {
       const existingId = urlToId.get(check.normalized);
       return res.json({
@@ -72,7 +77,7 @@ app.post("/api/shorturl", (req, res) => {
   });
 });
 
-// GET: /api/shorturl/:short_url -> redirect
+// GET: Rediriger vers l'URL originale
 app.get("/api/shorturl/:short_url", (req, res) => {
   const id = Number(req.params.short_url);
 
@@ -82,15 +87,15 @@ app.get("/api/shorturl/:short_url", (req, res) => {
 
   const original = idToUrl.get(id);
   if (!original) {
-    // FCC ne teste pas forcément ce cas, mais c'est propre
     return res.json({ error: "No short URL found for given input" });
   }
 
-  return res.redirect(original);
+  // Redirection permanente (301)
+  return res.redirect(301, original);
 });
 
-// Port
+// Démarrer le serveur
 const port = process.env.PORT || 5000;
 app.listen(port, "0.0.0.0", () => {
-  console.log(`Listening on port ${port}`);
+  console.log(`Server is running on port ${port}`);
 });
